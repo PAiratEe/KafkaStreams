@@ -1,3 +1,4 @@
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.{KStream, KStreamBuilder}
@@ -11,11 +12,13 @@ object KafkaStreams {
   def main(args: Array[String]) {
     val config: Properties = {
       val p = new Properties()
-      p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+      p.put(StreamsConfig.APPLICATION_ID_CONFIG, "application")
       p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+      p.put(StreamsConfig.STATE_DIR_CONFIG, "hdfs://localhost:9000/kafkaTemplate/")
       p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
       p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
       p.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once")
+      p.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000")
       p
     }
 
@@ -33,7 +36,7 @@ object KafkaStreams {
     necessaryMessages.foreach((key, unit) => {
       try {
         count += 1
-        val sql = s"INSERT INTO data (column2, column3) VALUES('${unit.substring(0, unit.indexOf("\n"))}', '${(System.nanoTime() - time) / 1e9d}')"
+        val sql = s"INSERT INTO data (column2, column3) VALUES('${unit.substring(0, unit.indexOf("\n"))}', '${(System.nanoTime() / 1e9d)}')"
         statement.executeUpdate(sql)
       }
       catch {
@@ -42,15 +45,14 @@ object KafkaStreams {
       }
     })
 
-//    necessaryMessages.to(Serdes.String(), Serdes.String(), "result")
     val streams: KafkaStreams = new KafkaStreams(builder, config)
+    streams.metrics()
     streams.start()
 
     Runtime.getRuntime.addShutdownHook(new Thread(() => {
       streams.close()
       statement.close()
       connect.close()
-      println("///////" + count / ((System.nanoTime() - time) / 1e9d) + " tps")
     }))
 
   }
